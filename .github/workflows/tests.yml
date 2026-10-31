@@ -1,0 +1,17 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-local.txt
+      - name: Banking app (record twice, strict backend, 3rd unrecorded user)
+        run: python tests/test_e2e.py
+      - name: GraphQL/XML app (no step markers, signature flag)
+        run: python tests/test_e2e_shop.py
+      - name: JMX checkpoint (catches GUI-breaking mistakes)
+        run: python tests/test_jmx_checkpoint.py

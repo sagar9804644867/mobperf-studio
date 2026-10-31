@@ -1,0 +1,10 @@
+# Naming convention used for every generated script. All names are editable in the UI.
+transaction_prefix: MOB          # MOB_<App>_<NN>_<Step>
+transaction_pattern: "{prefix}_{app}_{nn:02d}_{step}"
+sampler_pattern: "{nn:02d}_{sub:02d}_{method}_{short}"
+correlation_var_prefix: c_       # values extracted from responses
+parameter_var_prefix: p_         # values read from the CSV data file
+generated_var_prefix: g_         # values the app itself generates (UUID, nonce, timestamp)
+host_var_prefix: host_
+step_gap_seconds: 2.0            # when no step markers exist, a quiet gap this long starts a new step
+default_think_time_ms: 3000

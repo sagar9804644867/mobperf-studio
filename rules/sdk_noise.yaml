@@ -1,0 +1,81 @@
+# Traffic that mobile SDKs generate on their own. It is not part of the business
+# journey under test, so it is excluded from the script by default.
+# Each entry is matched as a host suffix ("googleapis.com" also matches "a.b.googleapis.com").
+# Edit freely, or override from the Streamlit UI.
+
+domains:
+  # Google / Firebase
+  - app-measurement.com
+  - firebaselogging-pa.googleapis.com
+  - firebaseinstallations.googleapis.com
+  - firebaseremoteconfig.googleapis.com
+  - firebase-settings.crashlytics.com
+  - crashlyticsreports-pa.googleapis.com
+  - fcmtoken.googleapis.com
+  - android.clients.google.com
+  - play.googleapis.com
+  - play.google.com
+  - google-analytics.com
+  - googletagmanager.com
+  - googleadservices.com
+  - doubleclick.net
+  - googlesyndication.com
+  - connectivitycheck.gstatic.com
+  - clients3.google.com
+  - clients4.google.com
+  - update.googleapis.com
+  - android.googleapis.com
+  - mtalk.google.com
+  - www.gstatic.com
+  - fonts.gstatic.com
+  # Apple
+  - gateway.icloud.com
+  - push.apple.com
+  - mesu.apple.com
+  - gsp-ssl.ls.apple.com
+  - configuration.ls.apple.com
+  - xp.apple.com
+  - captive.apple.com
+  - init.itunes.apple.com
+  # Attribution / analytics / crash / ads
+  - appsflyer.com
+  - appsflyersdk.com
+  - adjust.com
+  - branch.io
+  - app.link
+  - mixpanel.com
+  - amplitude.com
+  - segment.io
+  - segment.com
+  - sentry.io
+  - bugsnag.com
+  - newrelic.com
+  - nr-data.net
+  - datadoghq.com
+  - browser-intake-datadoghq.com
+  - dynatrace.com
+  - appdynamics.com
+  - instabug.com
+  - clevertap-prod.com
+  - wzrkt.com
+  - moengage.com
+  - onesignal.com
+  - braze.com
+  - appboy.com
+  - facebook.com
+  - graph.facebook.com
+  - facebook.net
+  - hotjar.com
+  - clarity.ms
+  - uxcam.com
+  - smartlook.com
+  - optimizely.com
+  - launchdarkly.com
+  - unity3d.com
+  - applovin.com
+
+# File extensions that are static assets (usually served by a CDN, cached by the app).
+static_extensions: [.png, .jpg, .jpeg, .gif, .webp, .svg, .ico, .css, .js, .woff, .woff2, .ttf, .otf, .mp4, .mp3, .m3u8, .ts, .map]
+
+# HTTP methods never scripted.
+skip_methods: [OPTIONS, CONNECT]

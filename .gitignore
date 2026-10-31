@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+mobperf_out/
+*.jtl
+jmeter.log
+report/
+.streamlit/secrets.toml
+# your own recordings may contain real tokens or personal data - keep them out of git
+recordings/
+*.local.har

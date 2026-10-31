@@ -1,0 +1,5 @@
+# Everything for your own machine: Streamlit UI + recorder + MCP server + tests.
+-r requirements.txt
+mitmproxy>=10.0
+mcp>=1.2
+cryptography>=41

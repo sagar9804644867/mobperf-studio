@@ -1,0 +1,24 @@
+# Hints the correlation engine uses on top of the record-twice diff.
+
+# Field names that hold data a real user types or picks -> CSV parameters.
+user_input_keys:
+  [username, user_name, userid_input, login, loginid, login_id, email, emailid, email_id, mobile, mobileno, mobile_number,
+   phone, phonenumber, phone_number, msisdn, password, passwd, pwd, pass, pin, mpin, tpin, otp, otp_code,
+   search, searchterm, search_term, query, q, keyword, keywords, term, amount, qty, quantity,
+   pincode, zipcode, zip, postcode, city, cardnumber, card_number, card_last4, account_number, accountno, panno, pan,
+   first_name, firstname, last_name, lastname, name, fullname, dob, address, payee, beneficiary, remarks, note, comment, coupon, promo_code, promocode]
+
+# Field names that are almost always server-issued dynamic values -> correlate.
+dynamic_keys_regex: "(token|session|sessid|sid|nonce|csrf|xsrf|state|code|ticket|key|guid|uuid|id$|_id|ref$|ref_|refno|txn|transaction|order|cart|basket|otp_ref|challenge|verifier|signature|etag|version_id|cursor|next|page_token|request_id|requestid|correlation|trace)"
+
+# Values that are never worth correlating even if they appear in a response.
+ignore_values: ["true", "false", "null", "none", "success", "SUCCESS", "OK", "ok", "en", "en-US", "en_US", "INR", "USD", "android", "ios", "Android", "iOS", "application/json", "Bearer", "GET", "POST"]
+
+# Request headers that are never correlated/parameterised (JMeter manages them).
+skip_request_headers: [host, content-length, connection, accept-encoding, cookie, te, upgrade-insecure-requests, proxy-connection, priority]
+
+# Request headers that suggest the app signs requests on-device (cannot be recreated from traffic alone).
+signature_header_regex: "(signature|hmac|x-sign|x-signature|x-auth-sign|x-checksum|x-hash|x-digest|integrity|attest|devicecheck|x-goog-spatula|x-safetynet)"
+
+# Content types that cannot be scripted as plain text.
+binary_content_regex: "(grpc|protobuf|x-protobuf|octet-stream|msgpack|thrift|flatbuffers)"

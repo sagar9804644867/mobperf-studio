@@ -1,0 +1,5 @@
+# Streamlit Community Cloud installs this file.
+streamlit>=1.50
+pandas>=2.0
+PyYAML>=6.0
+requests>=2.31
