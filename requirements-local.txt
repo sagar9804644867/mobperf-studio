@@ -1,5 +1,6 @@
-# Everything for your own machine: Streamlit UI + recorder + MCP server + tests.
+# Everything for your own machine: Streamlit UI + mobile recorder + web recorder + MCP server + tests.
 -r requirements.txt
 mitmproxy>=10.0
 mcp>=1.2
 cryptography>=41
+playwright>=1.40          # web recorder; then run: python -m playwright install chromium
