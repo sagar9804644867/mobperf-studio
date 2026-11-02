@@ -230,7 +230,7 @@ class PyReplay:
         plan_tree = self.root.find("hashTree")
         (_tp, plan_children), = _pairs(plan_tree)[:1]
         ev = Evaluator(self.props)
-        csv_vars = []
+        csv_vars, recycle, stop_thread = [], True, False
         tg = None
         for el, ht in _pairs(plan_children):
             if el.get("enabled") == "false":
@@ -241,24 +241,71 @@ class PyReplay:
                     if "Argument.name" in pp:
                         ev.vars[pp["Argument.name"]] = ev.ev(pp.get("Argument.value", ""))
             elif el.tag == "CSVDataSet":
-                csv_vars = _props(el).get("variableNames", "").split(",")
+                cp = _props(el)
+                csv_vars = cp.get("variableNames", "").split(",")
+                recycle = cp.get("recycle", "true") != "false"
+                stop_thread = cp.get("stopThread", "false") == "true"
             elif el.tag == "ThreadGroup":
                 tg = (el, ht)
         results = []
+        self.waits = []
+        self._iter_start = None
         if tg is None:
             return {"engine": "pyreplay", "results": [], "passed": False, "error": "no thread group"}
+        done, exhausted = 0, False
         for it in range(iterations):
             sess = requests.Session()
             sess.trust_env = False
             if self.proxies:
                 sess.proxies.update(self.proxies)
             if csv_vars and self.csv_rows:
-                row = self.csv_rows[it % len(self.csv_rows)]
+                if it >= len(self.csv_rows) and not recycle:
+                    if stop_thread:  # JMeter: CSV Data Set stopThread=true ends this user at end of file
+                        exhausted = True
+                        break
+                    row = ["<EOF>"] * len(csv_vars)
+                else:
+                    row = self.csv_rows[it % len(self.csv_rows)]
                 for n, v in zip(csv_vars, row):
                     ev.vars[n] = v
+            t0 = time.time()
             self._walk(tg[1], ev, sess, results, it + 1, None)
+            self.waits.append({"iteration": it + 1, "kind": "iteration_total", "ms": int((time.time() - t0) * 1000)})
+            done += 1
         passed = bool(results) and all(r["ok"] for r in results)
-        return {"engine": "pyreplay", "results": results, "passed": passed}
+        return {"engine": "pyreplay", "results": results, "passed": passed, "iterations_run": done,
+                "data_exhausted": exhausted, "waits": self.waits}
+
+    def _timer_ms(self, el, ev, it):
+        """Python mirror of the timers MobPerf generates (same rules as the Groovy in jmx_builder)."""
+        cp = _props(el)
+        if el.tag == "ConstantTimer":
+            try:
+                return int(float(ev.ev(cp.get("ConstantTimer.delay", "0")) or 0)), "constant"
+            except ValueError:
+                return 0, "constant"
+        if el.tag != "JSR223Timer":
+            return 0, "other"
+        script, params = cp.get("script", ""), ev.ev(cp.get("parameters", "")).strip()
+
+        def prop(name):
+            return str(self.props.get(name, "")).strip()
+        if "mobperf:think" in script:
+            a = params.split() or ["0"]
+            rec, def_pct = int(a[0]), (int(a[1]) if len(a) > 1 else 20)
+            base = int(prop("think_ms")) if prop("think_ms") else rec
+            pct = max(0, min(int(prop("think_dev_pct")) if prop("think_dev_pct") else def_pct, 100))
+            d = base * pct // 100
+            return max(0, base - d + random.randint(0, 2 * d)), "think"
+        if "mobperf:pacing_start" in script:
+            self._iter_start = time.time()
+            return 0, "pacing_start"
+        if "mobperf:pacing_end" in script:
+            pacing = int(prop("pacing_ms")) if prop("pacing_ms") else int(params or 0)
+            if pacing <= 0 or self._iter_start is None:
+                return 0, "pacing"
+            return max(0, pacing - int((time.time() - self._iter_start) * 1000)), "pacing"
+        return 0, "jsr223 (not run in Python replay)"
 
     def _walk(self, tree, ev, sess, results, it, txn):
         for el, ht in _pairs(tree):
@@ -268,6 +315,15 @@ class PyReplay:
                 self._walk(ht, ev, sess, results, it, el.get("testname"))
             elif el.tag == "HTTPSamplerProxy":
                 results.append(self._sample(el, ht, ev, sess, it, txn))
+            elif el.tag == "TestAction" and ht is not None:
+                for t, _ in _pairs(ht):
+                    if t.get("enabled") == "false" or not t.tag.endswith("Timer"):
+                        continue
+                    ms, kind = self._timer_ms(t, ev, it)
+                    if ms > 0:
+                        time.sleep(ms / 1000.0)
+                    if kind in ("think", "pacing", "constant"):
+                        self.waits.append({"iteration": it, "kind": kind, "ms": ms, "step": txn or el.get("testname")})
 
     def _sample(self, el, ht, ev, sess, it, txn):
         import requests
@@ -337,9 +393,21 @@ class PyReplay:
                 if val is None:
                     errors.append(f"{var} not found")
             elif c.tag == "ResponseAssertion":
-                exp = [s.text for s in c.find("collectionProp")]
-                if str(r.status_code) not in exp:
-                    errors.append(f"expected HTTP {exp[0]}, got {r.status_code}")
+                strings = [s.text or "" for s in c.find("collectionProp[@name='Asserion.test_strings']") or []]
+                if cp.get("Assertion.scope") == "variable":
+                    vname = cp.get("Scope.variable", "")
+                    target = str(ev.vars.get(vname, ""))
+                    if bool(int(cp.get("Assertion.test_type") or 2) & 4) and any(s and s in target for s in strings):
+                        errors.append(f"correlation {vname} not found")
+                elif cp.get("Assertion.test_field") == "Assertion.response_data":
+                    # JMeter: Substring (16) / Contains (2) with Not (4) fails when any string is found
+                    hit = [s for s in strings if s and s in text]
+                    negate = bool(int(cp.get("Assertion.test_type") or 2) & 4)
+                    if negate and hit:
+                        errors.append("response body contains " + ", ".join(repr(h) for h in hit))
+                else:
+                    if str(r.status_code) not in strings:
+                        errors.append(f"expected HTTP {strings[0] if strings else '?'}, got {r.status_code}")
         rec["ok"] = not errors
         rec["error"] = "; ".join(errors)
         rec["extracted"] = extracted
@@ -359,6 +427,6 @@ def validate(jmx_path: str, csv_path: str | None = None, iterations: int = 2, pr
     if csv_path and os.path.exists(csv_path):
         with open(csv_path, encoding="utf-8") as fh:
             csv_text = fh.read()
-    pr = {"think_ms": "0"}
+    pr = {"think_ms": "0", "pacing_ms": "0"}
     pr.update(props or {})
     return PyReplay(jmx, csv_text, pr, proxies=proxies, verify_tls=verify_tls).run(iterations)

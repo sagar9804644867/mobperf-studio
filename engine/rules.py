@@ -27,6 +27,10 @@ def correlation_rules() -> dict:
     return load("correlation_rules.yaml")
 
 
+def assertion_rules() -> dict:
+    return load("assertions.yaml")
+
+
 def host_matches(host: str, domains) -> bool:
     host = (host or "").lower()
     for d in domains:

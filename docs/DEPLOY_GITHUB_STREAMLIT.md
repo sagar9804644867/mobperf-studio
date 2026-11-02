@@ -64,7 +64,31 @@ git push
 ```
 Streamlit Cloud redeploys automatically on every push to `main`.
 
-## 7. Troubleshooting
+## 7. Updating to v1.2 (Web / API section, body + correlation assertions, think time, pacing, data mode)
+Files that are **new**: `engine/web_recorder.py`, `tests/test_workload.py`, `tests/groovy/timers_check.groovy`, `rules/assertions.yaml`, `tests/mock_web_app.py`, `tests/test_web_and_body.py`,
+`tests/test_har_robustness.py`, `samples/shopweb_alice.har`, `samples/shopweb_bob.har`.
+Files that **changed**: `streamlit_app.py`, `engine/jmx_builder.py`, `engine/validator.py`, `engine/pipeline.py`, `engine/rules.py`,
+`engine/jmx_lint.py`, `engine/report.py`, `mcp_server/server.py`, `mcp_server/cli.py`, `README.md`, `requirements-local.txt`, `.github/workflows/tests.yml`,
+`skills/mobile-perf-testing/SKILL.md`, `docs/DEPLOY_GITHUB_STREAMLIT.md`, `samples/MOB_MobiBank*`.
+`requirements.txt` (what Streamlit Cloud installs) did **not** change.
+
+**With Git** (unzip v1.2 over your existing folder, replacing files):
+```bash
+cd mobperf-studio
+git add .
+git commit -m "v1.2: Web/API section, body + correlation assertions, think time, pacing, data mode"
+git push
+```
+
+**Without Git (GitHub website)**: open the repo → **Add file → Upload files** → drag the *contents* of the unzipped
+`mobperf-studio` folder (all folders and files, not the folder itself) → **Commit changes**. GitHub replaces files with the
+same path and adds the new ones. The `.github` and `.streamlit` folders are hidden on Windows: in File Explorer turn on
+*View → Show → Hidden items* so they are dragged too.
+
+Streamlit Cloud redeploys by itself within a minute or two. If it does not, open https://share.streamlit.io → your app → ⋮ → **Reboot app**.
+Check: the sidebar now shows **📱 Mobile app** and **🌐 Web / API app**, the results have an **Assertions** tab and a *Body checks* metric, and Settings has a **Workload realism** block (think time, variation, pacing, test data).
+
+## 8. Troubleshooting
 | Problem | Fix |
 |---|---|
 | `ModuleNotFoundError` on Streamlit Cloud | Make sure `requirements.txt` is at the repo root and the main file path is exactly `streamlit_app.py` |

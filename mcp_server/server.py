@@ -422,19 +422,40 @@ def stop_recording() -> dict:
             "next": "Record the same journey again with a second test user, then generate_script(recording, second_recording)."}
 
 
+def _fail_patterns(spec: str):
+    spec = (spec or "default").strip()
+    if spec.lower() == "default":
+        return None
+    if spec.lower() == "none":
+        return []
+    return [p for p in spec.split("|") if p]
+
+
 @server.tool()
 def generate_script(recording: str, app_name: str, second_recording: str = "", out_dir: str = "",
-                    exclude_domains: str = "", include_hosts: str = "", run_validation: bool = False) -> dict:
+                    exclude_domains: str = "", include_hosts: str = "", run_validation: bool = False,
+                    app_type: str = "mobile", fail_if_contains: str = "default", think_ms: int = -1,
+                    think_dev_pct: int = 20, pacing_ms: int = 0, data_mode: str = "shared") -> dict:
     """Generate a correlated, parameterised, named JMeter script (.jmx + CSV + HTML report) from 1 or 2 HAR/.flow recordings.
-    exclude_domains / include_hosts: comma-separated host suffixes. run_validation replays 1 user x 2 iterations."""
+    exclude_domains / include_hosts: comma-separated host suffixes. run_validation replays 1 user x 2 iterations.
+    app_type: "mobile" (MOB_ names) or "web" (WEB_ names, for browser / API recordings).
+    fail_if_contains: "default" = rules/assertions.yaml, "none" = no body checks, or a '|'-separated list of texts that
+    fail a request when found in its response body (e.g. 'token expired|"error":"|Unauthorized').
+    think_ms: -1 = recorded think time per step, otherwise a fixed value. think_dev_pct: random +/- % (0 = exact).
+    pacing_ms: minimum iteration duration (0 = off). data_mode: "shared" (reuse CSV rows) or "unique" (each row once)."""
     out_dir = out_dir or os.path.join(HOME, "scripts", re.sub(r"[^A-Za-z0-9]+", "_", app_name))
     opts = Options(app_name=app_name,
                    extra_exclude=[d.strip() for d in exclude_domains.split(",") if d.strip()],
-                   include_hosts=[d.strip() for d in include_hosts.split(",") if d.strip()])
+                   include_hosts=[d.strip() for d in include_hosts.split(",") if d.strip()],
+                   kind="web" if app_type.strip().lower() == "web" else "mobile",
+                   fail_patterns=_fail_patterns(fail_if_contains),
+                   think_ms_fixed=None if think_ms is None or think_ms < 0 else think_ms,
+                   think_dev_pct=think_dev_pct, pacing_ms=pacing_ms,
+                   data_mode="unique" if data_mode.strip().lower() == "unique" else "shared")
     res, paths = generate_files(recording, second_recording or None, out_dir, opts, validate=run_validation)
     out = {"files": paths, "summary": {k: v for k, v in res.summary.items() if k not in ("jmx_check",)},
            "jmx_checkpoint": {"ok": res.summary["jmx_check"]["ok"], "errors": res.summary["jmx_check"]["errors"]},
-           "transactions": [st.label("MOB", res.app, "{prefix}_{app}_{nn:02d}_{step}") for st in res.steps],
+           "transactions": [st.label(res.prefix, res.app, "{prefix}_{app}_{nn:02d}_{step}") for st in res.steps],
            "variables": [{"name": v.name, "kind": v.kind, "how": (v.extractor or {}).get("expr") or v.generator or "CSV"}
                          for v in res.analysis.variables],
            "flags": [f"{f.severity}: {f.message}" for f in res.analysis.flags]}

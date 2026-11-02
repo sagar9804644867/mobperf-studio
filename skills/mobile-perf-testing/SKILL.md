@@ -38,6 +38,11 @@ You drive two MCP servers:
 
 ## 4. Generate
 `generate_script(recording=<har1>, second_recording=<har2>, app_name="<App>", run_validation=true)`
+Body checks are on by default (`fail_if_contains="default"`, from rules/assertions.yaml). If the app has its own error
+format, pass it, e.g. `fail_if_contains='"status":"FAILED"|SESSION_EXPIRED|"error":"'`; `"none"` turns them off.
+Workload: `think_ms=-1` keeps the recorded think time per step, `think_dev_pct=20` adds random ±20%, `pacing_ms=60000`
+sets a minimum iteration time, `data_mode="unique"` uses each CSV row once (ask the user how many test accounts they have).
+For a browser / API recording (not mobile) pass `app_type="web"` so names become WEB_<App>_<NN>_<Step>.
 - Add `exclude_domains` for any third-party SDK hosts that still appear, or `include_hosts` to keep only the app's API domains.
 - Read back to the user: transactions, the counts of correlations / parameters / generated values, coverage %, and every flag.
 

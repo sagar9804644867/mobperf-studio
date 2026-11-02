@@ -26,6 +26,14 @@ class Options:
     step_gap_s: float | None = None
     naming_overrides: dict = field(default_factory=dict)
     step_renames: dict = field(default_factory=dict)  # old step name -> new name
+    # Body text that fails a request when present (None = use rules/assertions.yaml defaults; [] = none)
+    fail_patterns: list | None = None
+    # Workload realism (all can still be overridden at run time with -J)
+    think_ms_fixed: int | None = None  # None = recorded think time per step
+    think_dev_pct: int = 20            # random variation +/- %, 0 = exact
+    pacing_ms: int = 0                 # minimum iteration duration, 0 = off
+    data_mode: str = "shared"          # "shared" = recycle rows, "unique" = each row once, then the user stops
+    kind: str = "mobile"  # "mobile" -> MOB_ names, "web" -> WEB_ names (same engine)
 
 
 @dataclass
@@ -40,10 +48,11 @@ class Result:
     samplers: list
     summary: dict
     validation: dict | None = None
+    prefix: str = "MOB"
 
     @property
     def base(self) -> str:
-        return f"MOB_{self.app}"
+        return f"{self.prefix}_{self.app}"
 
     def file_names(self):
         return f"{self.base}.jmx", f"{self.base}_data.csv", f"{self.base}_report.html"
@@ -62,27 +71,43 @@ class Result:
 
 def how_to_run(res: Result) -> str:
     jmx, csvn, _ = res.file_names()
-    hosts = "\n".join(f"  -J{v}=<host>   (recorded: {h})" for (s, h, p), v in res.analysis.hosts.items())
+    s = res.summary
+    hosts = "\n".join(f"  -J{v}=<host>   (recorded: {h})" for (sc, h, p), v in res.analysis.hosts.items())
+    data = ("UNIQUE - each CSV row is used once across all users; a user stops when the rows run out.\n"
+            "   Provide at least users x loops rows." if s.get("data_mode") == "unique" else
+            "SHARED - rows are handed out in turn to all users and reused from the top when the file ends.")
+    pacing = f"{s.get('pacing_ms')} ms" if s.get("pacing_ms") else "off"
     return f"""MobPerf Studio - {res.app}
 
 1. Keep {jmx} and {csvn} in the same folder.
 2. Add real test accounts to {csvn} (one row per virtual user; header row stays).
-3. Smoke test (1 user x 2 iterations):
-     jmeter -n -t {jmx} -l smoke.jtl -Jusers=1 -Jloops=2
+   Data mode: {data}
+3. Smoke test (1 user x 2 iterations, no waits):
+     jmeter -n -t {jmx} -l smoke.jtl -Jusers=1 -Jloops=2 -Jthink_ms=0 -Jpacing_ms=0
 4. Load test example:
-     jmeter -n -t {jmx} -l run.jtl -e -o report -Jusers=50 -Jrampup=300 -Jloops=10 -Jthink_ms=3000
+     jmeter -n -t {jmx} -l run.jtl -e -o report -Jusers=50 -Jrampup=300 -Jloops=10 -Jpacing_ms=60000
 5. Point at another environment without editing the script:
 {hosts}
 
-Properties: users, rampup, loops, think_ms (blank = recorded think time per step),
-connect_timeout, response_timeout, data_file.
+Workload settings baked into this script (override any with -J):
+  think time   : {s.get('think', 'recorded per step')} +/- {s.get('think_dev_pct', 20)}% random   (-Jthink_ms=, -Jthink_dev_pct=)
+  pacing       : {pacing}   (-Jpacing_ms=60000 makes every iteration last at least 60 s; 0 = off)
+  users/rampup/loops : -Jusers= -Jrampup= -Jloops=
+  timeouts     : -Jconnect_timeout= -Jresponse_timeout=   data file: -Jdata_file=
+
+Think time is excluded from transaction response times. Pacing waits only for the time left in the
+iteration, so throughput per user = 1 iteration per pacing interval (if the iteration is faster than it).
 """
 
 
 def generate(rec1: Recording, rec2: Recording | None = None, opts: Options | None = None) -> Result:
     opts = opts or Options()
     naming = dict(rules.naming_rules())
+    if opts.kind == "web":
+        naming["transaction_prefix"] = "WEB"
     naming.update(opts.naming_overrides or {})
+    prefix = re.sub(r"[^A-Za-z0-9]+", "", str(naming.get("transaction_prefix") or "MOB")) or "MOB"
+    naming["transaction_prefix"] = prefix
     app = slug(opts.app_name, "") or "MyApp"
     app = app[0].upper() + app[1:]
 
@@ -98,14 +123,20 @@ def generate(rec1: Recording, rec2: Recording | None = None, opts: Options | Non
         if st.name in opts.step_renames and opts.step_renames[st.name]:
             st.name = re.sub(r"[^A-Za-z0-9]+", "", opts.step_renames[st.name]) or st.name
 
-    jmx, samplers = build(analysis, steps, app, naming, {"csv_name": f"MOB_{app}_data.csv"})
+    fail_pats = opts.fail_patterns if opts.fail_patterns is not None else rules.assertion_rules().get("fail_patterns", [])
+    fail_pats = [p for p in (fail_pats or []) if isinstance(p, str) and p]
+    jmx, samplers = build(analysis, steps, app, naming,
+                          {"csv_name": f"{prefix}_{app}_data.csv", "fail_patterns": fail_pats,
+                           "think_ms_fixed": opts.think_ms_fixed, "think_dev_pct": max(0, min(int(opts.think_dev_pct), 100)),
+                           "pacing_ms": max(0, int(opts.pacing_ms or 0)),
+                           "data_mode": "unique" if opts.data_mode == "unique" else "shared"})
     csv_text = build_csv(analysis)
     kinds = [v.kind for v in analysis.variables]
     cov = None
     if rec2 is not None:
         cov = 100.0 * analysis.dynamic_resolved / analysis.dynamic_total if analysis.dynamic_total else 100.0
     summary = {
-        "app": app, "source": rec1.source + (f" + {rec2.source}" if rec2 is not None else ""),
+        "app": app, "kind": opts.kind, "prefix": prefix, "source": rec1.source + (f" + {rec2.source}" if rec2 is not None else ""),
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "transactions": len(steps), "requests": len(kept), "removed": len(removed),
         "correlations": kinds.count("correlation"), "parameters": kinds.count("parameter"),
@@ -114,10 +145,15 @@ def generate(rec1: Recording, rec2: Recording | None = None, opts: Options | Non
         "blockers": sum(1 for f in analysis.flags if f.severity == "blocker"),
         "warnings": sum(1 for f in analysis.flags if f.severity == "warning"),
         "hosts": [h for (_, h, _) in analysis.hosts],
+        "fail_patterns": fail_pats,
+        "think": "recorded per step" if opts.think_ms_fixed is None else f"{int(opts.think_ms_fixed)} ms",
+        "think_dev_pct": max(0, min(int(opts.think_dev_pct), 100)), "pacing_ms": max(0, int(opts.pacing_ms or 0)),
+        "data_mode": "unique" if opts.data_mode == "unique" else "shared",
+        "body_checks": sum(1 for s in samplers if s.get("body_check")) if samplers and isinstance(samplers[0], dict) else 0,
     }
     lr = lint(jmx)
     summary["jmx_check"] = lr.as_dict()
-    res = Result(app, jmx, csv_text, "", analysis, steps, removed, samplers, summary)
+    res = Result(app, jmx, csv_text, "", analysis, steps, removed, samplers, summary, prefix=prefix)
     res.report_html = build_report(res)
     return res
 

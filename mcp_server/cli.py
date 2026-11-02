@@ -1,6 +1,9 @@
 """Command line for the same engine (no MCP client needed).
 
-  python -m mcp_server.cli generate rec1.har [rec2.har] --app MyApp [--out out_dir] [--validate]
+  python -m mcp_server.cli generate rec1.har [rec2.har] --app MyApp [--type web] [--out out_dir] [--validate]
+        [--fail-pattern "token expired" --fail-pattern Unauthorized] [--no-body-checks]
+        [--think-ms 3000] [--think-dev-pct 20] [--pacing-ms 60000] [--data-mode unique]
+  python -m engine.web_recorder scenario.json recording.har      (record a web app in headless Chromium)
   python -m mcp_server.cli check script.jmx
   python -m mcp_server.cli validate script.jmx [--csv data.csv] [--iterations 2]
 """
@@ -29,6 +32,15 @@ def main(argv=None):
     g.add_argument("--exclude", default="")
     g.add_argument("--include", default="")
     g.add_argument("--validate", action="store_true")
+    g.add_argument("--type", choices=["mobile", "web"], default="mobile", help="mobile -> MOB_ names, web -> WEB_ names")
+    g.add_argument("--fail-pattern", action="append", default=None,
+                   help="text that fails a request when found in its response body (repeatable; replaces rules/assertions.yaml)")
+    g.add_argument("--no-body-checks", action="store_true", help="status-code assertions only")
+    g.add_argument("--think-ms", type=int, default=None, help="fixed think time for every step (default: recorded per step)")
+    g.add_argument("--think-dev-pct", type=int, default=20, help="random think-time variation +/- percent (0 = exact)")
+    g.add_argument("--pacing-ms", type=int, default=0, help="minimum iteration duration in ms (0 = off)")
+    g.add_argument("--data-mode", choices=["shared", "unique"], default="shared",
+                   help="shared = reuse CSV rows; unique = each row once, user stops when rows run out")
     c = sub.add_parser("check")
     c.add_argument("jmx")
     v = sub.add_parser("validate")
@@ -39,7 +51,9 @@ def main(argv=None):
 
     if a.cmd == "generate":
         opts = Options(app_name=a.app, extra_exclude=[x for x in a.exclude.split(",") if x],
-                       include_hosts=[x for x in a.include.split(",") if x])
+                       include_hosts=[x for x in a.include.split(",") if x], kind=a.type,
+                       fail_patterns=[] if a.no_body_checks else a.fail_pattern,
+                       think_ms_fixed=a.think_ms, think_dev_pct=a.think_dev_pct, pacing_ms=a.pacing_ms, data_mode=a.data_mode)
         res, paths = generate_files(a.recordings[0], a.recordings[1] if len(a.recordings) > 1 else None, a.out, opts, validate=a.validate)
         s = res.summary
         cov = "n/a (single recording)" if s["coverage_pct"] is None else f"{s['coverage_pct']:.0f}%"

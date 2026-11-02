@@ -52,6 +52,7 @@ GUI = {
     "JSR223PreProcessor": {"TestBeanGUI"},
     "JSR223PostProcessor": {"TestBeanGUI"},
     "JSR223Sampler": {"TestBeanGUI"},
+    "JSR223Timer": {"TestBeanGUI"},
 }
 SAMPLERS = {"HTTPSamplerProxy", "JSR223Sampler", "TestAction"}
 CONTROLLERS = {"TransactionController", "LoopController"}
@@ -64,6 +65,7 @@ REQUIRED = {
     "ThreadGroup": ["ThreadGroup.num_threads", "ThreadGroup.ramp_time"],
     "ResponseAssertion": ["Assertion.test_field", "Assertion.test_type"],
     "ConstantTimer": ["ConstantTimer.delay"],
+    "JSR223Timer": ["scriptLanguage", "script"],
     "HeaderManager": [],
 }
 FUNCTIONS = {"P", "property", "UUID", "time", "RandomString", "Random", "changeCase", "urlencode", "urldecode", "V", "javaScript",

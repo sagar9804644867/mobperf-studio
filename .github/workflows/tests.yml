@@ -9,9 +9,21 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-local.txt
+      - run: python -m playwright install --with-deps chromium
       - name: Banking app (record twice, strict backend, 3rd unrecorded user)
         run: python tests/test_e2e.py
       - name: GraphQL/XML app (no step markers, signature flag)
         run: python tests/test_e2e_shop.py
       - name: JMX checkpoint (catches GUI-breaking mistakes)
         run: python tests/test_jmx_checkpoint.py
+      - name: Web app (real Chromium recording) + body and correlation assertions
+        run: python tests/test_web_and_body.py
+      - name: Real-world HAR quirks (no crash, valid JMX)
+        run: python tests/test_har_robustness.py
+      - name: Groovy (to run the generated JSR223 timer scripts for real)
+        run: |
+          npm pack npm-groovy-lint@19.0.0 --silent
+          mkdir -p "$RUNNER_TEMP/groovy" && tar xzf npm-groovy-lint-19.0.0.tgz -C "$RUNNER_TEMP/groovy"
+          echo "GROOVY_CP=$RUNNER_TEMP/groovy/package/lib/java/groovy/lib/*" >> "$GITHUB_ENV"
+      - name: Think time, pacing, test-data mode
+        run: python tests/test_workload.py

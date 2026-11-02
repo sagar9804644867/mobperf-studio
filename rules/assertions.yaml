@@ -1,0 +1,15 @@
+# Response-body checks. A script fails a request when its response CONTAINS one of these strings,
+# so an HTTP 200 that carries an error body is still caught (for example an expired token).
+#
+# MobPerf only adds a pattern to a request if that pattern is NOT already in the recorded response,
+# so a normal response that legitimately contains a word is never flagged.
+# Matching is case-sensitive, like JMeter's Response Assertion "Contains".
+# Edit this list, or change it per run in the Streamlit app (Settings) or with --fail-pattern.
+fail_patterns:
+  - '"error":"'
+  - '"error": "'
+  - '"errors":['
+  - 'token expired'
+  - 'invalid token'
+  - 'Unauthorized'
+  - 'Internal Server Error'
